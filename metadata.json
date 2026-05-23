@@ -1,0 +1,6 @@
+{
+  "name": "Private Photo Vault",
+  "description": "A secure, zero-knowledge client-side encrypted photo vault and editor. Create private albums, edit photos in your browser, and sync securely with the cloud.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

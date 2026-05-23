@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- ALBUMS RULES ---
+    match /albums/{albumId} {
+      function isValidAlbum(data) {
+        return data.id is string && data.id.size() <= 64 &&
+               data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+               data.isEncrypted is bool &&
+               (!data.keys().contains('description') || (data.description is string && data.description.size() <= 500)) &&
+               (!data.keys().contains('salt') || (data.salt is string && data.salt.size() <= 200)) &&
+               data.createdAt is string && data.createdAt.size() <= 40 &&
+               data.ownerId == request.auth.uid;
+      }
+
+      // Check fields size on create
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(albumId) &&
+                    incoming().id == albumId &&
+                    isValidAlbum(incoming()) &&
+                    incoming().keys().hasAll(['id', 'name', 'isEncrypted', 'createdAt', 'ownerId']);
+
+      allow read: if isSignedIn() && isEmailVerified() && resource.data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn() && isEmailVerified() && isValidId(albumId) &&
+                    isValidAlbum(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().createdAt == existing().createdAt &&
+                    incoming().isEncrypted == existing().isEncrypted &&
+                    (!existing().keys().contains('salt') || incoming().salt == existing().salt) &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description']);
+
+      allow delete: if isSignedIn() && isEmailVerified() && resource.data.ownerId == request.auth.uid;
+    }
+
+    // --- PHOTOS RULES ---
+    match /photos/{photoId} {
+      function isValidPhoto(data) {
+        return data.id is string && data.id.size() <= 64 &&
+               data.albumId is string && data.albumId.size() <= 64 &&
+               data.ownerId == request.auth.uid &&
+               data.isEncrypted is bool &&
+               data.uploadedAt is string && data.uploadedAt.size() <= 40 &&
+               // Encrypted specific fields
+               (!data.isEncrypted || (
+                 data.keys().contains('iv') && data.iv is string && data.iv.size() <= 128 &&
+                 data.keys().contains('salt') && data.salt is string && data.salt.size() <= 128 &&
+                 data.keys().contains('ciphertext') && data.ciphertext is string && data.ciphertext.size() <= 2500000
+               )) &&
+               // Plain specific fields
+               (data.isEncrypted || (
+                 (!data.keys().contains('title') || (data.title is string && data.title.size() <= 150)) &&
+                 (!data.keys().contains('description') || (data.description is string && data.description.size() <= 1000)) &&
+                 data.keys().contains('dataUrl') && data.dataUrl is string && data.dataUrl.size() <= 2500000 &&
+                 (!data.keys().contains('tags') || (data.tags is list && data.tags.size() <= 10))
+               ));
+      }
+
+      allow create: if isSignedIn() && isEmailVerified() && isValidId(photoId) &&
+                    incoming().id == photoId &&
+                    isValidPhoto(incoming()) &&
+                    get(/databases/$(database)/documents/albums/$(incoming().albumId)).data.ownerId == request.auth.uid &&
+                    incoming().keys().hasAll(['id', 'albumId', 'ownerId', 'isEncrypted', 'uploadedAt']);
+
+      allow read: if isSignedIn() && isEmailVerified() && resource.data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn() && isEmailVerified() && isValidId(photoId) &&
+                    isValidPhoto(incoming()) &&
+                    incoming().ownerId == existing().ownerId &&
+                    incoming().albumId == existing().albumId &&
+                    incoming().uploadedAt == existing().uploadedAt &&
+                    incoming().isEncrypted == existing().isEncrypted &&
+                    get(/databases/$(database)/documents/albums/$(incoming().albumId)).data.ownerId == request.auth.uid &&
+                    incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'tags', 'dataUrl', 'iv', 'salt', 'ciphertext']);
+
+      allow delete: if isSignedIn() && isEmailVerified() && resource.data.ownerId == request.auth.uid;
+    }
+  }
+}

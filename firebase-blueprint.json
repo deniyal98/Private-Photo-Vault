@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Album": {
+      "title": "Album",
+      "description": "Represents a collection of photos, which can optionally be client-side encrypted with a master password.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the album" },
+        "name": { "type": "string", "description": "Name of the album" },
+        "description": { "type": "string", "description": "Short description of the album" },
+        "isEncrypted": { "type": "boolean", "description": "Whether the album uses client-side zero-knowledge encryption" },
+        "salt": { "type": "string", "description": "Salt used to derive the cryptographic key from the album passphrase" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "ownerId": { "type": "string", "description": "Firebase Auth UID of the album owner" }
+      },
+      "required": ["id", "name", "isEncrypted", "createdAt", "ownerId"]
+    },
+    "Photo": {
+      "title": "Photo",
+      "description": "Represents a photo stored either as unencrypted plain data or client-side encrypted ciphertext.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the photo" },
+        "albumId": { "type": "string", "description": "Identifier of the album this photo belongs to" },
+        "ownerId": { "type": "string", "description": "Firebase Auth UID of the photo owner" },
+        "isEncrypted": { "type": "boolean", "description": "Whether this photo's payload is client-side encrypted" },
+        "iv": { "type": "string", "description": "IV used for decryption, base64 encoded (only if isEncrypted is true)" },
+        "salt": { "type": "string", "description": "Salt used for decryption, base64 encoded (only if isEncrypted is true)" },
+        "ciphertext": { "type": "string", "description": "Client-side encrypted string containing the JSON representation of the decrypted fields (only if isEncrypted is true)" },
+        "title": { "type": "string", "description": "Title of the photo (only present if unencrypted)" },
+        "description": { "type": "string", "description": "Description of the photo (only present if unencrypted)" },
+        "dataUrl": { "type": "string", "description": "Optimized image base64 data URL (only present if unencrypted)" },
+        "tags": { "type": "array", "description": "Array of tags for this photo (only present if unencrypted)" },
+        "uploadedAt": { "type": "string", "format": "date-time", "description": "Upload timestamp" }
+      },
+      "required": ["id", "albumId", "ownerId", "isEncrypted", "uploadedAt"]
+    }
+  },
+  "firestore": {
+    "/albums/{albumId}": {
+      "schema": "Album",
+      "description": "Stores user photo albums"
+    },
+    "/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Stores photos associated with user albums, supporting client-side encrypted payloads"
+    }
+  }
+}
